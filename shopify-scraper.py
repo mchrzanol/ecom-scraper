@@ -56,16 +56,6 @@ def get_request(url, proxy_list):
             pass # Silently ignore and retry
             
     return None # Failed after retries
-    utm_params = {
-        'utm_source': 'offrack_app',
-        'utm_medium': 'referral',
-        'utm_campaign': 'app_discovery'
-    }
-    parsed = urlparse(url)
-    query = parse_qs(parsed.query)
-    query.update(utm_params)
-    new_query = urlencode(query, doseq=True)
-    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
 
 def check_availability_via_js(product_handle, base_url, proxy_list):
     """
