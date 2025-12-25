@@ -61,20 +61,28 @@ def check_availability_via_js(product_handle, base_url, proxy_list):
     """
     PLAN B: Accesses the .js endpoint of a specific product.
     This bypasses hiding inventory states on collective lists.
+    Returns: (is_available, variants_array)
     """
     js_url = f"{base_url}/products/{product_handle}.js"
     r = get_request(js_url, proxy_list)
     
-    if not r: return False # Failed to fetch, assume unavailable
+    if not r: return False, [] # Failed to fetch, assume unavailable
 
     try:
         data = r.json()
         variants = data.get('variants', [])
-        # Check if any variant is available
-        # The .js endpoint is usually honest and has the 'available' field
-        return any(v.get('available') for v in variants)
+        # Extract variant info with title and availability
+        variant_list = [
+            {
+                'title': v.get('title', ''),
+                'available': v.get('available', False)
+            }
+            for v in variants
+        ]
+        is_available = any(v.get('available') for v in variants)
+        return is_available, variant_list
     except:
-        return False
+        return False, []
 
 def clean_html(raw_html):
     if not raw_html: return ""
@@ -135,6 +143,7 @@ if __name__ == "__main__":
 
                 # 2. AVAILABILITY CHECK (Hybrid Strategy)
                 is_available = False
+                variant_list = []
                 
                 # STEP A: Check quick JSON list
                 # Look at available OR inventory states/policy
@@ -146,13 +155,29 @@ if __name__ == "__main__":
                 
                 if json_explicit_avail is True:
                     is_available = True
+                    # Extract variants from JSON
+                    variant_list = [
+                        {
+                            'title': v.get('title', ''),
+                            'available': v.get('available', False)
+                        }
+                        for v in variants
+                    ]
                 elif qty > 0 or policy == 'continue':
                     is_available = True
+                    # Extract variants from JSON (may not have 'available' field)
+                    variant_list = [
+                        {
+                            'title': v.get('title', ''),
+                            'available': (v.get('inventory_quantity', 0) > 0 or v.get('inventory_policy') == 'continue')
+                        }
+                        for v in variants
+                    ]
                 else:
                     # STEP B: If JSON list is silent/unclear -> query the .js endpoint
                     # We only do this if Step A gave False/No data, to avoid unnecessary calls
                     # print(f"   ...querying .js for {name}") # Optional log
-                    is_available = check_availability_via_js(handle, base_url, proxies)
+                    is_available, variant_list = check_availability_via_js(handle, base_url, proxies)
 
                 # 3. Rest of data
                 price = float(first_variant.get('price', 0))
@@ -174,7 +199,8 @@ if __name__ == "__main__":
                     'is_sold_out': is_available,
                     'buy_link': product_url, # utm applied later if needed
                     'images': images,
-                    'description': desc[:500], # short description
+                    'variants': variant_list,
+                    'description': desc, # short description
                     'scraped_at': time.strftime('%Y-%m-%d %H:%M:%S')
                 }
                 
