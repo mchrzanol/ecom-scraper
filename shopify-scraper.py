@@ -180,9 +180,10 @@ if __name__ == "__main__":
                     is_available, variant_list = check_availability_via_js(handle, base_url, proxies)
 
                 # 3. Rest of data
-                price = float(first_variant.get('price', 0))
-                compare = first_variant.get('compare_at_price')
-                old_price = float(compare) if compare else price
+                price = float(first_variant.get('price') or 0)
+                compare = float(first_variant.get('compare_at_price') or 0)
+                # print("compare:", compare, "price:", price, "compare bigger than price:", float(compare) > float(price))
+                old_price = compare if compare and compare > price else price
                 
                 images = [img['src'] for img in p.get('images', [])]
                 # main_image = images[0] if images else ""
@@ -196,7 +197,7 @@ if __name__ == "__main__":
                     'price': price,
                     'original_price': old_price,
                     'is_discounted': old_price > price,
-                    'is_sold_out': is_available,
+                    'is_sold_out': not is_available, # inverse of availability
                     'buy_link': product_url, # utm applied later if needed
                     'images': images,
                     'variants': variant_list,
