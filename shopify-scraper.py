@@ -25,10 +25,26 @@ def get_random_headers():
 def load_proxies(file_path, silent=False):
     try:
         with open(file_path, 'r') as f:
-            proxies = [line.strip() for line in f if line.strip()]
+            raw_proxies = [line.strip() for line in f if line.strip()]
+        
+        formatted_proxies = []
+        for proxy in raw_proxies:
+            # Support format: ip:port:user:pass
+            parts = proxy.split(':')
+            if len(parts) == 4:
+                ip, port, user, password = parts
+                proxy_url = f"http://{user}:{password}@{ip}:{port}"
+                formatted_proxies.append(proxy_url)
+            elif proxy.startswith('http://') or proxy.startswith('https://'):
+                # Already formatted
+                formatted_proxies.append(proxy)
+            else:
+                if not silent:
+                    print(f"[!] Failed to parse: {proxy}")
+        
         if not silent:
-            print(f"[i] Loaded {len(proxies)} proxy servers.")
-        return proxies
+            print(f"[i] Loaded {len(formatted_proxies)} proxy servers.")
+        return formatted_proxies
     except FileNotFoundError:
         if not silent:
             print("[i] Not found any proxy - running on local IP.")
@@ -43,7 +59,6 @@ def get_request(url, proxy_list):
         if proxy_list:
             proxy_url = random.choice(proxy_list)
             proxy_dict = {'http': proxy_url, 'https': proxy_url}
-
         try:
             r = requests.get(url, headers=headers, proxies=proxy_dict, timeout=10)
             if r.status_code == 200:
@@ -52,7 +67,7 @@ def get_request(url, proxy_list):
                 time.sleep(5)
             elif r.status_code == 403: # Bot detected
                 pass # Try again with different proxy/user-agent
-        except Exception:
+        except Exception as e:
             pass # Silently ignore and retry
             
     return None # Failed after retries
@@ -63,7 +78,7 @@ def check_availability_via_js(product_handle, base_url, proxy_list):
     This bypasses hiding inventory states on collective lists.
     Returns: (is_available, variants_array)
     """
-    js_url = f"{base_url}/products/{product_handle}.js"
+    js_url = f"{base_url}/products/{product_handle}.js?currency=PLN"
     r = get_request(js_url, proxy_list)
     
     if not r: return False, [] # Failed to fetch, assume unavailable
@@ -115,7 +130,7 @@ if __name__ == "__main__":
         
         # Fetch product list (JSON)
         r = get_request(f"{list_url}?page={page}", proxies)
-        
+                
         if not r:
             if not args.silent:
                 print("[!] Error fetching product list. Stopping.")
@@ -134,7 +149,7 @@ if __name__ == "__main__":
                 # 1. Basic data
                 name = p['title']
                 handle = p['handle']
-                product_url = f"{base_url}/products/{handle}"
+                product_url = f"{base_url}/products/{handle}?currency=PLN"
                 
                 variants = p.get('variants', [])
                 if not variants: continue
